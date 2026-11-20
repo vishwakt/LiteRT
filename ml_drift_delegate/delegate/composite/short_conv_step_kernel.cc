@@ -132,7 +132,8 @@ std::unique_ptr<::ml_drift::GPUOperation> CreateFusedShortConvStep(
     const ::ml_drift::TensorDescriptor& state_in_out_desc, int num_slices,
     int hidden_size, int conv_L_cache, bool is_gated, bool use_silu,
     const ::ml_drift::TensorDescriptor* num_valid_tokens_desc) {
-  const int clamped_L_cache = std::clamp(conv_L_cache, 2, 4);
+  const int clamped_L_cache =
+      std::clamp(conv_L_cache, kMinShortConvLCache, kMaxShortConvLCache);
   const int num_state_taps = clamped_L_cache - 1;
   const int seq_len = dst_desc.GetBHWCShape().w;
   // Tokens [0, num_head_tokens) convolve windows that reach into conv_state.
@@ -352,11 +353,7 @@ absl::Status BuildShortConvStepGpuGraph(
   if (output_ids.size() != 2) {
     return absl::InvalidArgumentError("ShortConvStep expects 2 outputs.");
   }
-  if (attr.conv_L_cache < 2 || attr.conv_L_cache > 4) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("ShortConvStep supports conv_L_cache in [2, 4], but got ",
-                     attr.conv_L_cache));
-  }
+  ABSL_RETURN_IF_ERROR(ValidateShortConvLCache(attr.conv_L_cache));
 
   ABSL_ASSIGN_OR_RETURN(auto in_proj, model_builder->GetTensor(input_ids[0]));
   ABSL_ASSIGN_OR_RETURN(auto conv_weight,
